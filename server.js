@@ -14,13 +14,16 @@ app.listen(port, () => {
     console.log(`Server started on port ${port}`);
 })
 
-const adminUser = {
+const users = [];
+const admins = [];
+
+const goldsteinUser = {
     username: 'Mr. Goldstein',
     hash: 'ff5de730fa61e4b9d3ec2298efdce03e24240fb00d45f0d21f4644cda8c85ac4864091d93eefbfbb3b44b11fd6a8107d7f4675f9d4c93fc2503c27b9aa927dc8',
     salt: '19bc8c2e05f668a19bccc5262042af2b'
 }
+admins.push(goldsteinUser);
 
-const users = [];
 const generateKeys = () => {
     const keys = crypto.generateKeyPairSync('rsa', {
         modulusLength: 2048, // Recommended key size for security
@@ -37,6 +40,7 @@ const generateKeys = () => {
     console.log('Public Key:', keys.publicKey);
     return keys;
 }
+
 const decryptData = (base64Data) => {
     // 1. Convert from encoded string to a buffer
     const buffer = Buffer.from(base64Data, 'base64');
@@ -50,6 +54,7 @@ const decryptData = (base64Data) => {
         buffer
     ).toString("utf8");
 };
+
 function createUser(user, password) {
     const salt = crypto.randomBytes(16).toString('hex');
 
@@ -67,11 +72,21 @@ function createUser(user, password) {
         };
         console.log(newUser);
         users.push(newUser);
-
-
-
     } )
+}
 
+function verifyPassword(inputPassword, storedSalt, storedHash, actionOnSuccess, actionOnFail) {
+    crypto.scrypt(inputPassword, storedSalt, 64, (err, derivedKey) => {
+        if (err) throw err;
+
+        const inputHash = derivedKey.toString('hex');
+
+        // Compare the newly generated hash with the one stored in the database
+        if(storedHash === inputHash) {
+            actionOnSuccess();
+        } else
+            actionOnFail();
+    });
 }
 
 
@@ -92,5 +107,43 @@ app.post('/user', (req, res) => {
         }
     }
     createUser(decryptedUserName, decryptedPassword);
-    res.status(201);
+    res.status(201).json();
+})
+
+app.put('/data', (req, res) => {
+
+    //body contains username, password, and data as encrypted base64 text
+    const{encryptedUserName, encryptedPassword, encryptedData} = req.body;
+
+    //decrypt username, password, and data
+    let decryptedUserName = decryptData(encryptedUserName);
+    let decryptedPassword = decryptData(encryptedPassword);
+    let decryptedData = decryptData(encryptedPassword);
+
+    //initialize user
+    let user;
+
+    //find user in users and admin groups
+    for(let i = 0; i < users.length; i++)
+    {
+        if(decryptedUserName === users[i].username)
+            user = users[i];
+    }
+    for(let i = 0; i < admins.length; i++)
+    {
+        if(decryptedUserName === admins[i].username)
+        {
+            user = admins[i];
+        }
+
+    }
+
+    //determine access
+    verifyPassword(decryptedPassword,
+        user.salt,
+        user.hash,
+        ()=>{user.data = decryptedData; res.status(200).send('success');},
+        ()=>{if(user === null) res.status(404); else res.status(403);});
+    console.log(user.data);
+    console.log(user.data);
 })
