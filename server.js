@@ -115,35 +115,55 @@ app.put('/data', (req, res) => {
     //body contains username, password, and data as encrypted base64 text
     const{encryptedUserName, encryptedPassword, encryptedData} = req.body;
 
-    //decrypt username, password, and data
+    //decrypt username, password, data, and query user
     let decryptedUserName = decryptData(encryptedUserName);
     let decryptedPassword = decryptData(encryptedPassword);
-    let decryptedData = decryptData(encryptedPassword);
+    let decryptedData = decryptData(encryptedData);
+    const queryUser = req.query.user;
 
-    //initialize user
+    //initialize user and boolean found
     let user;
+    let userFound = false;
+    let userMatchedAdmin = false;
 
     //find user in users and admin groups
     for(let i = 0; i < users.length; i++)
     {
         if(decryptedUserName === users[i].username)
-            user = users[i];
+        {
+            userFound = true;
+            if(queryUser === users[i].username)
+            {
+                user = users[i]
+            }
+        }
     }
     for(let i = 0; i < admins.length; i++)
     {
-        if(decryptedUserName === admins[i].username)
+        if(queryUser === admins[i].username)
         {
             user = admins[i];
+            userFound = true;
+            userMatchedAdmin = true;
         }
-
     }
 
-    //determine access
-    verifyPassword(decryptedPassword,
-        user.salt,
-        user.hash,
-        ()=>{user.data = decryptedData; res.status(200).send('success');},
-        ()=>{if(user === null) res.status(404); else res.status(403);});
-    console.log(user.data);
-    console.log(user.data);
+    if(userFound === false){
+        res.status(401);
+    }
+    else if(userMatchedAdmin === false && userFound === false){
+        res.status(404);
+    }
+    else
+    {
+        //determine access
+        verifyPassword(decryptedPassword,
+            user.salt,
+            user.hash,
+            ()=>{user.data = decryptedData;     console.log(user.data); res.status(200).send('success');},
+            ()=>
+            {
+                res.status(403);
+            });
+    }
 })
