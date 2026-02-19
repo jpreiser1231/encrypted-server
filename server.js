@@ -22,7 +22,13 @@ const goldsteinUser = {
     hash: 'ff5de730fa61e4b9d3ec2298efdce03e24240fb00d45f0d21f4644cda8c85ac4864091d93eefbfbb3b44b11fd6a8107d7f4675f9d4c93fc2503c27b9aa927dc8',
     salt: '19bc8c2e05f668a19bccc5262042af2b'
 }
+const jayAdminUser = {
+    username: 'JayPrize',
+    hash: '3e241140d263cd7220c89a38b97c2e6454c3124b7fe634b834925d10a98295af44d033b80fb2dc21c813c273580e3f2260e7b8d83ff3028a65e7bdb93d20a8a3',
+    salt: 'a6f17a074b89707e8668ed987f2e97e9',
+}
 admins.push(goldsteinUser);
+admins.push(jayAdminUser);
 
 const generateKeys = () => {
     const keys = crypto.generateKeyPairSync('rsa', {
@@ -88,6 +94,15 @@ function verifyPassword(inputPassword, storedSalt, storedHash, actionOnSuccess, 
             actionOnFail();
     });
 }
+const urlSafeToBase64 = (urlSafeStr) => {
+    // Add padding back for standard Base64 if needed
+    let standardB64 = urlSafeStr.replace(/-/g, '+').replace(/_/g, '/');
+    while (standardB64.length % 4) {
+        standardB64 += '=';
+    }
+    return standardB64;
+};
+
 
 
 let {publicKey, privateKey} = generateKeys();
@@ -127,32 +142,37 @@ app.put('/data', (req, res) => {
     let userMatchedAdmin = false;
 
     //find user in users and admin groups
-    for(let i = 0; i < users.length; i++)
-    {
-        if(decryptedUserName === users[i].username)
-        {
-            userFound = true;
-            if(queryUser === users[i].username)
-            {
-                user = users[i]
-            }
-        }
-    }
     for(let i = 0; i < admins.length; i++)
     {
-        if(queryUser === admins[i].username)
+        if(decryptedUserName === admins[i].username)
         {
             user = admins[i];
             userFound = true;
             userMatchedAdmin = true;
         }
     }
+    if(!userMatchedAdmin)
+    {
+        for(let i = 0; i < users.length; i++)
+        {
+            if(decryptedUserName === users[i].username)
+            {
+                userFound = true;
+                if(queryUser === users[i].username)
+                {
+                    user = users[i]
+                }
+            }
+        }
+    }
+
+
 
     if(userFound === false){
-        res.status(401);
+        res.status(401).json();
     }
     else if(userMatchedAdmin === false && userFound === false){
-        res.status(404);
+        res.status(404).json();
     }
     else
     {
@@ -163,7 +183,72 @@ app.put('/data', (req, res) => {
             ()=>{user.data = decryptedData;     console.log(user.data); res.status(200).send('success');},
             ()=>
             {
-                res.status(403);
+                res.status(403).json();
+            });
+    }
+})
+
+app.get('/data' , (req, res) => {
+    //make u and p as the query
+    const{u, p} = req.query;
+
+
+    //make u and p into url safe encoding
+    let urlSafeUsername = urlSafeToBase64(u)
+    let urlSafePassword = urlSafeToBase64(p)
+
+    //make decryped username and password
+    let decryptedUserName = decryptData(urlSafeUsername);
+    let decryptedPassword = decryptData(urlSafePassword);
+
+    const queryUser = req.query.user;
+
+    //initialize user and boolean found and admin boolean
+    let user;
+    let userFound = false;
+    let userMatchedAdmin = false;
+
+    //find user in users and admin groups
+    for(let i = 0; i < admins.length; i++)
+    {
+        if(decryptedUserName === admins[i].username)
+        {
+            user = admins[i];
+            userFound = true;
+            userMatchedAdmin = true;
+        }
+    }
+    if(!userMatchedAdmin)
+    {
+        for(let i = 0; i < users.length; i++)
+        {
+            if(decryptedUserName === users[i].username)
+            {
+                userFound = true;
+                if(queryUser === users[i].username)
+                {
+                    user = users[i]
+                }
+            }
+        }
+    }
+    //status code
+    if(userFound === false){
+        res.status(401).json();
+    }
+    else if(userMatchedAdmin === false && userFound === false){
+        res.status(404).json();
+    }
+    else
+    {
+        //determine access
+        verifyPassword(decryptedPassword,
+            user.salt,
+            user.hash,
+            ()=>{res.status(200).json(user.data);},
+            ()=>
+            {
+                res.status(403).json();
             });
     }
 })
