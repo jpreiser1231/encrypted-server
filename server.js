@@ -94,6 +94,17 @@ function verifyPassword(inputPassword, storedSalt, storedHash, actionOnSuccess, 
             actionOnFail();
     });
 }
+
+function findQueryUser(inputUsername)
+{
+    for(let i = 0; i < users.length; i++)
+    {
+        if(users[i].username === inputUsername)
+            return users[i]
+    }
+    return null;
+}
+
 const urlSafeToBase64 = (urlSafeStr) => {
     // Add padding back for standard Base64 if needed
     let standardB64 = urlSafeStr.replace(/-/g, '+').replace(/_/g, '/');
@@ -121,6 +132,13 @@ app.post('/user', (req, res) => {
             return res.status(400).send("User already exists");
         }
     }
+    for(let i = 0; i < admins.length; i++)
+    {
+        if(decryptedUserName === admins[i].username)
+        {
+            return res.status(403).send("User already exists");
+        }
+    }
     createUser(decryptedUserName, decryptedPassword);
     res.status(201).json();
 })
@@ -134,7 +152,11 @@ app.put('/data', (req, res) => {
     let decryptedUserName = decryptData(encryptedUserName);
     let decryptedPassword = decryptData(encryptedPassword);
     let decryptedData = decryptData(encryptedData);
-    const queryUser = req.query.user;
+
+    //get query username and matching query user
+    const queryUserName = req.query.user;
+    const queryUser = findQueryUser(queryUserName);
+
 
     //initialize user and boolean found
     let user;
@@ -151,22 +173,21 @@ app.put('/data', (req, res) => {
             userMatchedAdmin = true;
         }
     }
+
     if(!userMatchedAdmin)
     {
         for(let i = 0; i < users.length; i++)
         {
-            if(decryptedUserName === users[i].username)
+            if(queryUserName === users[i].username)
             {
                 userFound = true;
-                if(queryUser === users[i].username)
+                if(decryptedUserName === users[i].username)
                 {
                     user = users[i]
                 }
             }
         }
     }
-
-
 
     if(userFound === false){
         res.status(401).json();
@@ -180,7 +201,7 @@ app.put('/data', (req, res) => {
         verifyPassword(decryptedPassword,
             user.salt,
             user.hash,
-            ()=>{user.data = decryptedData;     console.log(user.data); res.status(200).send('success');},
+            ()=>{queryUser.data = decryptedData;     console.log(queryUser.data); res.status(200).send('success');},
             ()=>
             {
                 res.status(403).json();
@@ -201,7 +222,8 @@ app.get('/data' , (req, res) => {
     let decryptedUserName = decryptData(urlSafeUsername);
     let decryptedPassword = decryptData(urlSafePassword);
 
-    const queryUser = req.query.user;
+    const queryUserName = req.query.user;
+    const queryUser = findQueryUser(queryUserName);
 
     //initialize user and boolean found and admin boolean
     let user;
@@ -225,7 +247,7 @@ app.get('/data' , (req, res) => {
             if(decryptedUserName === users[i].username)
             {
                 userFound = true;
-                if(queryUser === users[i].username)
+                if(queryUserName === users[i].username)
                 {
                     user = users[i]
                 }
@@ -245,7 +267,7 @@ app.get('/data' , (req, res) => {
         verifyPassword(decryptedPassword,
             user.salt,
             user.hash,
-            ()=>{res.status(200).json(user.data);},
+            ()=>{res.status(200).json(queryUser.data);},
             ()=>
             {
                 res.status(403).json();
